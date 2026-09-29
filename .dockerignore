@@ -1,0 +1,8 @@
+node_modules
+dist
+target
+.git
+.idea
+.vscode
+__pycache__
+postgres_data
