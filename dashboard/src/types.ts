@@ -43,15 +43,31 @@ export interface HotelOption {
 }
 
 export interface ActivityOption {
-  rank: number;
+  rank?: number;
   id: string;
   name: string;
   category: string;
   estimated_cost: number;
   currency: string;
-  duration: string;
-  rating: number;
-  description: string;
+  duration?: string;
+  rating?: number;
+  description?: string;
+  day?: number;
+  time_slot?: string;
+  address?: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  source?: string;
+  is_mock?: boolean;
+}
+
+export interface DayPlan {
+  day: number;
+  theme?: string;
+  estimated_daily_cost?: number;
+  activities: ActivityOption[];
 }
 
 export interface BudgetSummary {
@@ -94,6 +110,8 @@ export interface ItineraryResult {
   };
   activities?: {
     count: number;
+    day_count?: number;
+    days?: DayPlan[];
     highlights?: ActivityOption[];
   };
   financial_overview?: BudgetSummary;

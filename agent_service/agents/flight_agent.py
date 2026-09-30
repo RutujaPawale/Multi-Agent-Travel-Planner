@@ -31,14 +31,22 @@ def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
     destination = state.get("destination", "CDG")
     start_date = state.get("start_date", "")
     end_date = state.get("end_date", "")
-    budget = float(state.get("budget", 1000.0))
+    # Check if budget agent provided a reduced flight_budget_cap during re-planning
+    replan_cap = state.get("flight_budget_cap")
+    if replan_cap is not None:
+        flight_budget = round(float(replan_cap), 2)
+        logger.info(f"Flight Agent applying re-planning flight budget cap: ${flight_budget:.2f}")
+    else:
+        flight_budget = float(state.get("budget", 1000.0))
 
     input_payload = {
         "origin": origin,
         "destination": destination,
         "start_date": start_date,
         "end_date": end_date,
-        "budget": budget
+        "budget": flight_budget,
+        "replan_cap_applied": replan_cap is not None,
+        "replan_attempt": state.get("replan_count", 0)
     }
 
     # Select provider through factory
@@ -55,7 +63,7 @@ def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
                 destination=destination,
                 start_date=start_date,
                 end_date=end_date,
-                budget=budget
+                budget=flight_budget
             )
             if flight_models:
                 flights = [f.model_dump() for f in flight_models]
@@ -66,14 +74,14 @@ def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
                 logger.warning(f"{fallback_reason}; falling back to MockProvider.")
                 is_fallback = True
                 error_msg = fallback_reason
-                fallback_models = MockProvider().search_flights(origin, destination, start_date, end_date, budget)
+                fallback_models = MockProvider().search_flights(origin, destination, start_date, end_date, flight_budget)
                 flights = [f.model_dump() for f in fallback_models]
         except Exception as e:
             fallback_reason = str(e)
             logger.warning(f"{provider_name} flight search failed ({fallback_reason}); falling back to MockProvider.")
             is_fallback = True
             error_msg = fallback_reason
-            fallback_models = MockProvider().search_flights(origin, destination, start_date, end_date, budget)
+            fallback_models = MockProvider().search_flights(origin, destination, start_date, end_date, flight_budget)
             flights = [f.model_dump() for f in fallback_models]
     else:
         logger.info(f"Using MockProvider for flights ({fallback_reason}).")
@@ -82,19 +90,40 @@ def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
             destination=destination,
             start_date=start_date,
             end_date=end_date,
-            budget=budget
+            budget=flight_budget
         )
         flights = [f.model_dump() for f in flight_models]
 
     active_provider = "MockProvider" if is_fallback else provider_name
     status = "SUCCESS"
 
+    # Evaluate filter mode against budget cap
+    filter_mode: Optional[str] = None
+    filter_message: Optional[str] = None
+    if flight_budget > 0 and flights:
+        qualifying = [f for f in flights if f.get("price", 0.0) <= flight_budget]
+        if qualifying:
+            filter_mode = "QUALIFYING_UNDER_CAP"
+            filter_message = f"Found {len(qualifying)} offer(s) qualifying at or under budget cap (${flight_budget:.2f}); selected top {len(flights)} option(s)."
+            logger.info(f"Flight Agent selection mode: {filter_mode} - {filter_message}")
+        else:
+            lowest_price = min(f.get("price", 0.0) for f in flights)
+            filter_mode = "FALLBACK_CHEAPEST_AVAILABLE"
+            filter_message = f"No flight offers found at or under cap (${flight_budget:.2f}). Fell back to cheapest available offers (lowest: ${lowest_price:.2f})."
+            logger.warning(f"Flight Agent selection mode: {filter_mode} - {filter_message}")
+
     output_payload = {
         "flight_count": len(flights),
         "top_flights": flights,
+        "flight_budget": flight_budget,
+        "flight_budget_cap": replan_cap,
+        "filter_mode": filter_mode,
+        "filter_message": filter_message,
         "provider": active_provider,
         "used_live_api": not is_fallback,
         "is_fallback": is_fallback,
+        "replan_cap_applied": replan_cap is not None,
+        "replan_attempt": state.get("replan_count", 0),
         "fallback_reason": error_msg,
         "error_notice": error_msg
     }
@@ -109,11 +138,15 @@ def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
         error_message=error_msg
     )
 
+    summary_text = f"Found {len(flights)} flight options ranked by price (Provider: {active_provider})."
+    if filter_mode:
+        summary_text += f" [{filter_mode}: {filter_message}]"
+
     log_entry = {
         "agent": "Flight Agent",
         "status": status,
         "timestamp": datetime.utcnow().isoformat() + "Z",
-        "summary": f"Found {len(flights)} flight options ranked by price (Provider: {active_provider}).",
+        "summary": summary_text,
         "log_id": log_id,
         "details": output_payload
     }

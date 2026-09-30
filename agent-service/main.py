@@ -60,7 +60,13 @@ def health_check():
         "service": "agent-service",
         "duffel_configured": bool(os.getenv("DUFFEL_API_KEY")),
         "flight_provider": os.getenv("FLIGHT_PROVIDER", "duffel"),
-        "hotel_provider": os.getenv("HOTEL_PROVIDER", "duffel")
+        "hotel_provider": os.getenv("HOTEL_PROVIDER", "duffel"),
+        "opentripmap_configured": bool(os.getenv("OPENTRIPMAP_API_KEY")),
+        "activity_provider": os.getenv("ACTIVITY_PROVIDER", "opentripmap"),
+        "llm_configured": bool(os.getenv("LLM_API_KEY")),
+        "llm_provider": os.getenv("LLM_PROVIDER", "gemini"),
+        "llm_model": os.getenv("LLM_MODEL", "gemini-2.5-flash"),
+        "llm_fallback_model": os.getenv("LLM_FALLBACK_MODEL", "gemini-3.1-flash-lite")
     }
 
 @app.get("/")
@@ -85,6 +91,7 @@ def plan_trip(request: TripPlanRequest):
             "flight_options": [],
             "hotel_options": [],
             "activity_options": [],
+            "day_plans": [],
             "budget_summary": {},
             "final_itinerary": {},
             "errors": [],

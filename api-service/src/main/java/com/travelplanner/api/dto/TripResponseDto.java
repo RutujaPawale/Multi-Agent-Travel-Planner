@@ -16,6 +16,7 @@ public class TripResponseDto {
     private String preferences;
     private String status;
     private Object itineraryResult;
+    private Object budgetSummary;
     private List<AgentRunDto> agentRuns;
     private OffsetDateTime createdAt;
 
@@ -91,6 +92,14 @@ public class TripResponseDto {
 
     public void setItineraryResult(Object itineraryResult) {
         this.itineraryResult = itineraryResult;
+    }
+
+    public Object getBudgetSummary() {
+        return budgetSummary;
+    }
+
+    public void setBudgetSummary(Object budgetSummary) {
+        this.budgetSummary = budgetSummary;
     }
 
     public List<AgentRunDto> getAgentRuns() {

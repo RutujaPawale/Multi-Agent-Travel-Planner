@@ -66,6 +66,7 @@ def synthesizer_node(state: TravelPlanState) -> Dict[str, Any]:
     flights = state.get("flight_options", [])
     hotels = state.get("hotel_options", [])
     activities = state.get("activity_options", [])
+    day_plans = state.get("day_plans", [])
     budget_summary = state.get("budget_summary", {})
 
     final_itinerary = {
@@ -84,9 +85,12 @@ def synthesizer_node(state: TravelPlanState) -> Dict[str, Any]:
         },
         "activities": {
             "count": len(activities),
+            "day_count": len(day_plans),
+            "days": day_plans,
             "highlights": activities
         },
         "financial_overview": budget_summary,
+        "budget_breakdown": budget_summary,
         "generation_timestamp": datetime.utcnow().isoformat() + "Z"
     }
 
@@ -98,7 +102,10 @@ def synthesizer_node(state: TravelPlanState) -> Dict[str, Any]:
         "summary": final_itinerary["summary"],
         "flights_count": len(flights),
         "hotels_count": len(hotels),
-        "activities_count": len(activities)
+        "activities_count": len(activities),
+        "days_planned": len(day_plans),
+        "replan_attempts": state.get("replan_count", 0),
+        "final_budget": budget_summary
     }
 
     if orchestrator_run_id:
@@ -137,8 +144,31 @@ def synthesizer_node(state: TravelPlanState) -> Dict[str, Any]:
         "agent_logs": updated_logs
     }
 
+def route_after_flight(state: TravelPlanState) -> str:
+    """Routes to budget_agent if executing a re-plan, else advances to hotel_agent."""
+    if state.get("is_replanning"):
+        return "budget_agent"
+    return "hotel_agent"
+
+def route_after_hotel(state: TravelPlanState) -> str:
+    """Routes to budget_agent if executing a re-plan, else advances to activity_agent."""
+    if state.get("is_replanning"):
+        return "budget_agent"
+    return "activity_agent"
+
+def route_after_budget(state: TravelPlanState) -> str:
+    """
+    Evaluates budget re-planning decisions:
+    - If budget agent triggered a re-plan (max 2 retries), routes to target agent.
+    - Otherwise, routes to synthesizer for final compilation.
+    """
+    target = state.get("next_agent_to_replan")
+    if target in ("flight_agent", "hotel_agent", "activity_agent"):
+        return target
+    return "synthesizer"
+
 def create_travel_planner_graph():
-    """Builds and compiles the LangGraph StateGraph orchestration pipeline."""
+    """Builds and compiles the LangGraph StateGraph orchestration pipeline with budget re-planning loop."""
     workflow = StateGraph(TravelPlanState)
 
     # Register graph nodes
@@ -149,13 +179,45 @@ def create_travel_planner_graph():
     workflow.add_node("budget_agent", budget_agent_node)
     workflow.add_node("synthesizer", synthesizer_node)
 
-    # Establish linear agent pipeline
+    # Initial pipeline flow
     workflow.add_edge(START, "orchestrator_init")
     workflow.add_edge("orchestrator_init", "flight_agent")
-    workflow.add_edge("flight_agent", "hotel_agent")
-    workflow.add_edge("hotel_agent", "activity_agent")
+
+    # Conditional routing from flight_agent
+    workflow.add_conditional_edges(
+        "flight_agent",
+        route_after_flight,
+        {
+            "hotel_agent": "hotel_agent",
+            "budget_agent": "budget_agent"
+        }
+    )
+
+    # Conditional routing from hotel_agent
+    workflow.add_conditional_edges(
+        "hotel_agent",
+        route_after_hotel,
+        {
+            "activity_agent": "activity_agent",
+            "budget_agent": "budget_agent"
+        }
+    )
+
+    # Activity agent always routes to budget_agent
     workflow.add_edge("activity_agent", "budget_agent")
-    workflow.add_edge("budget_agent", "synthesizer")
+
+    # Conditional re-planning routing from budget_agent (capped at 2 retries)
+    workflow.add_conditional_edges(
+        "budget_agent",
+        route_after_budget,
+        {
+            "flight_agent": "flight_agent",
+            "hotel_agent": "hotel_agent",
+            "activity_agent": "activity_agent",
+            "synthesizer": "synthesizer"
+        }
+    )
+
     workflow.add_edge("synthesizer", END)
 
     return workflow.compile()

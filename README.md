@@ -34,7 +34,7 @@ A production-ready multi-agent travel planning platform orchestrated using **Lan
               |  1. Orchestrator Init Node                    |
               |  2. Flight Agent (Provider: Duffel / Mock)    |
               |  3. Hotel Agent (Provider: Duffel / Mock)     |
-              |  4. Activity Agent (Stubbed Curated Tours)    |
+              |  4. Activity Agent (OpenTripMap API + LLM Planner) |
               |  5. Budget Agent (Cost & Feasibility Review)  |
               |  6. Itinerary Synthesizer Node                |
               +-----------------------------------------------+
@@ -46,13 +46,19 @@ A production-ready multi-agent travel planning platform orchestrated using **Lan
    - Houses the `StateGraph` orchestration workflow.
    - **Provider Architecture**:
      - `FlightProvider` & `HotelProvider`: Abstract interfaces with normalized Pydantic models (`FlightOption`, `HotelOption`).
+     - `PlacesProvider`: Abstract interface for attraction and point-of-interest discovery returning `PlaceItem`.
+     - `OpenTripMapProvider`: Queries OpenTripMap API (`https://opentripmap.io` via `/places/radius` and `/places/xid/{xid}`) for top attractions, dining, and sights matching traveler preferences. Free API key, no billing required.
      - `DuffelProvider`: Integrates with Duffel API v2 (`/air/offer_requests` for flight searches, `/stays/search` for hotel offers).
-     - `MockProvider`: Generates realistic offline mock data with calibrated pricing and rankings.
-     - Provider selection controlled via `FLIGHT_PROVIDER` and `HOTEL_PROVIDER` environment variables (`duffel` | `mock`), defaulting to `mock` when `DUFFEL_API_KEY` is omitted.
+     - `MockProvider`: Generates realistic offline mock data for flights, hotels, and candidate places with calibrated pricing and rankings.
+     - Provider selection controlled via `FLIGHT_PROVIDER`, `HOTEL_PROVIDER`, and `ACTIVITY_PROVIDER` environment variables, defaulting to `mock` when API keys are omitted.
      - Automatically logs fallback reasons (missing API key, HTTP status codes, or exceptions) to `agent_runs.error_message`.
+   - **Activity Agent & LLM Planner**:
+     - Discovers candidate places via `PlacesProvider`.
+     - Allocates a configurable share of total budget to activities (`ACTIVITY_BUDGET_PCT`, default `20.0%`).
+     - Generates a structured day-by-day plan using an LLM call (`LLM_PROVIDER` / `LLM_API_KEY`, supporting Gemini and OpenAI) with Pydantic JSON validation and single-retry error recovery.
+     - Automatically falls back to a balanced rule-based daily distribution if the LLM key is absent or invalid.
    - **Hotel Agent**: Allocates a configurable lodging percentage (`HOTEL_BUDGET_PCT`, default `35.0%`) to establish a per-night budget cap, ranking top 3 options by rating (descending), then price (ascending).
-   - **Activity Agent (Stub)**: Curates top tourist activities and food tours.
-   - **Budget Agent (Stub)**: Computes total projected expenses, budget surplus/deficit, and financial feasibility.
+   - **Budget Agent**: Computes total projected expenses, budget surplus/deficit, and financial feasibility.
    - **PostgreSQL Agent Logger**: Logs every agent step (`agent_name`, `input_data`, `output_data`, `status`, `error_message`, `created_at`) directly to the `agent_runs` table in PostgreSQL.
 
 2. **`api-service/` (Java 21, Spring Boot 3.3, Spring Data JPA)**
@@ -65,7 +71,7 @@ A production-ready multi-agent travel planning platform orchestrated using **Lan
    - User-friendly travel planning form (Origin, Destination, Dates, Budget, Preferences).
    - Interactive demo presets for quick testing.
    - **Raw JSON Response Viewer**: Pretty-printed JSON view with copy-to-clipboard and export.
-   - **Structured UI Viewer**: Tabbed view of Flights, Hotels, Activities, Budget, and live PostgreSQL agent run execution timeline with fallback status inspection.
+   - **Structured UI Viewer**: Tabbed view of Flights, Hotels, Activities (grouped day-by-day with time slots, categories, addresses, and daily costs), Budget overview, and live PostgreSQL agent run execution timeline with fallback status inspection.
 
 4. **`PostgreSQL` (Database)**
    - Initialized via `docker/init.sql`.
@@ -89,27 +95,32 @@ Once running, access:
 
 ---
 
-## 🔑 Duffel API & Provider Configuration
+## 🔑 API & Provider Configuration
 
-To enable live flight and hotel searches using Duffel API v2:
-
-1. Create a free developer account at [Duffel](https://duffel.com/).
-2. In developer test mode, generate a test API token (prefixed with `duffel_test_`).
-3. Set your token and provider preferences in `.env`:
+Configure keys in `.env` to enable live APIs:
 
 ```env
-# Duffel Test Mode Token
+# Duffel Test Mode Token (Flights & Hotels)
 DUFFEL_API_KEY=duffel_test_your_token_here
-
-# Provider Selection (duffel | mock)
 FLIGHT_PROVIDER=duffel
 HOTEL_PROVIDER=duffel
 
-# Lodging Budget Allocation Percentage (default: 35%)
+# OpenTripMap API (Attractions & Points of Interest - https://opentripmap.io)
+OPENTRIPMAP_API_KEY=your_opentripmap_api_key_here
+ACTIVITY_PROVIDER=opentripmap
+
+# LLM Planner (Day-by-Day Activity Synthesis)
+LLM_PROVIDER=gemini
+LLM_API_KEY=your_llm_api_key_here
+LLM_MODEL=gemini-2.5-flash
+LLM_FALLBACK_MODEL=gemini-3.1-flash-lite
+
+# Budget Allocations (%)
 HOTEL_BUDGET_PCT=35.0
+ACTIVITY_BUDGET_PCT=20.0
 ```
 
-> **Automatic Fallback Guarantee**: If `DUFFEL_API_KEY` is empty, omitted, or encounters an API error, both agents seamlessly fall back to `MockProvider`. The exact fallback reason (e.g. `Missing DUFFEL_API_KEY environment variable` or HTTP error status) is recorded in `agent_runs.error_message`.
+> **Resilient LLM Execution & Automatic Fallback**: The Activity Agent LLM planner implements retry with exponential backoff (`2s`, `5s`, `10s`) specifically for HTTP 503 (High Demand) and HTTP 429 (Rate Limit) responses. If `LLM_MODEL` remains unavailable, it automatically switches to `LLM_FALLBACK_MODEL` (e.g. `gemini-3.1-flash-lite`). If all models in the chain fail or credentials are omitted, it gracefully falls back to the deterministic rule-based planner. The model that succeeded (or the fallback reason) is recorded in `agent_runs.output_data` and `agent_runs.error_message`.
 
 ---
 

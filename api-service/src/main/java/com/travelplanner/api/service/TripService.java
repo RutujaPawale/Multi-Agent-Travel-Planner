@@ -117,8 +117,18 @@ public class TripService {
         // Parse JSON itinerary if present
         if (trip.getItineraryResult() != null && !trip.getItineraryResult().isBlank()) {
             try {
-                Object parsed = objectMapper.readValue(trip.getItineraryResult(), new TypeReference<Map<String, Object>>() {});
+                Map<String, Object> parsed = objectMapper.readValue(trip.getItineraryResult(), new TypeReference<Map<String, Object>>() {});
                 dto.setItineraryResult(parsed);
+                if (parsed.containsKey("budget_summary")) {
+                    dto.setBudgetSummary(parsed.get("budget_summary"));
+                } else if (parsed.containsKey("budget_breakdown")) {
+                    dto.setBudgetSummary(parsed.get("budget_breakdown"));
+                } else if (parsed.containsKey("final_itinerary") && parsed.get("final_itinerary") instanceof Map) {
+                    Map<?, ?> fin = (Map<?, ?>) parsed.get("final_itinerary");
+                    if (fin.containsKey("financial_overview")) {
+                        dto.setBudgetSummary(fin.get("financial_overview"));
+                    }
+                }
             } catch (Exception e) {
                 dto.setItineraryResult(trip.getItineraryResult());
             }

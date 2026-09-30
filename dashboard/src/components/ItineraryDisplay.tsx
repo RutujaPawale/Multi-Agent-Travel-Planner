@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { TripResponse, FlightOption, HotelOption, ActivityOption, AgentRun } from '../types';
-import { Plane, Building, Compass, Wallet, Database, Clock, ChevronDown, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { TripResponse, FlightOption, HotelOption, ActivityOption, DayPlan, AgentRun } from '../types';
+import { Plane, Building, Compass, Wallet, Database, Clock, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, MapPin } from 'lucide-react';
 
 interface ItineraryDisplayProps {
   trip: TripResponse;
@@ -15,8 +15,23 @@ export const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ trip }) => {
   const flights: FlightOption[] = itinerary.flights?.all_options || rawResult.flight_options || [];
   const hotels: HotelOption[] = itinerary.accommodation?.all_options || rawResult.hotel_options || [];
   const activities: ActivityOption[] = itinerary.activities?.highlights || rawResult.activity_options || [];
+  const dayPlans: DayPlan[] = itinerary.activities?.days || rawResult.day_plans || [];
   const budget = itinerary.financial_overview || rawResult.budget_summary;
   const agentRuns: AgentRun[] = trip.agentRuns || [];
+
+  // Group activities into day plans if not pre-grouped
+  const groupedDays: DayPlan[] = dayPlans.length > 0 ? dayPlans : (
+    activities.length > 0 ? Array.from(
+      activities.reduce((acc, act) => {
+        const d = act.day || 1;
+        if (!acc.has(d)) acc.set(d, { day: d, theme: `Day ${d} Sights & Experiences`, estimated_daily_cost: 0, activities: [] });
+        const dp = acc.get(d)!;
+        dp.activities.push(act);
+        dp.estimated_daily_cost = Number(((dp.estimated_daily_cost || 0) + (act.estimated_cost || 0)).toFixed(2));
+        return acc;
+      }, new Map<number, DayPlan>()).values()
+    ).sort((a, b) => a.day - b.day) : []
+  );
 
   return (
     <div style={{
@@ -348,48 +363,140 @@ export const ItineraryDisplay: React.FC<ItineraryDisplayProps> = ({ trip }) => {
 
         {/* ACTIVITIES TAB */}
         {activeTab === 'activities' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 600 }}>Recommended Activities (Stubbed Agent)</h3>
-              <span className="badge badge-amber">Stub Data</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600 }}>
+                  Day-by-Day Activity Itinerary ({groupedDays.length} Days • {activities.length} Sights & Experiences)
+                </h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Curated points of interest, dining, and cultural highlights structured across each day of the journey.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span className="badge badge-purple">
+                  {activities[0]?.is_mock ? 'Mock Places' : (activities[0]?.source || 'OpenTripMap API')}
+                </span>
+                <span className="badge badge-blue">
+                  {rawResult.agent_logs?.some((l: any) => l.details?.used_llm) || rawResult.used_llm ? 'AI Planner (LLM)' : 'Day-by-Day Schedule'}
+                </span>
+              </div>
             </div>
 
-            {activities.map((act, idx) => (
-              <div
-                key={act.id || idx}
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '16px 20px',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  flexWrap: 'wrap',
-                  gap: '12px'
-                }}
-              >
-                <div style={{ maxWidth: '75%' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontWeight: 600, fontSize: '15px' }}>{act.name}</span>
-                    <span className="badge badge-purple">{act.category}</span>
-                  </div>
-                  <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '6px' }}>
-                    {act.description}
-                  </p>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                    Duration: {act.duration} • Rating: ★ {act.rating}
-                  </div>
-                </div>
+            {groupedDays.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)' }}>No activities planned for this trip.</p>
+            ) : (
+              groupedDays.map((dayPlan) => (
+                <div
+                  key={dayPlan.day}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {/* Day Header */}
+                  <div style={{
+                    padding: '12px 18px',
+                    background: 'rgba(59, 130, 246, 0.08)',
+                    borderBottom: '1px solid var(--border-color)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '10px'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{
+                        background: 'var(--accent-blue)',
+                        color: '#ffffff',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        padding: '3px 10px',
+                        borderRadius: '6px'
+                      }}>
+                        Day {dayPlan.day}
+                      </span>
+                      <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
+                        {dayPlan.theme || `Day ${dayPlan.day} Exploration`}
+                      </span>
+                    </div>
 
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '18px', fontWeight: 700, color: 'var(--accent-purple)' }}>
-                    ${act.estimated_cost}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600, color: 'var(--accent-green)' }}>
+                      <span>Est. Daily Activities:</span>
+                      <span style={{ background: 'rgba(34, 197, 94, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                        ${Number(dayPlan.estimated_daily_cost || 0).toFixed(2)}
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Per participant</div>
+
+                  {/* Day Activities List */}
+                  <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    {dayPlan.activities.map((act, aIdx) => (
+                      <div
+                        key={act.id || aIdx}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          padding: '12px 16px',
+                          borderRadius: '8px',
+                          background: 'var(--bg-input)',
+                          border: '1px solid rgba(255, 255, 255, 0.04)',
+                          flexWrap: 'wrap',
+                          gap: '12px'
+                        }}
+                      >
+                        <div style={{ maxWidth: '78%' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            {act.time_slot && (
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
+                                padding: '2px 8px',
+                                borderRadius: '4px',
+                                background: act.time_slot.toLowerCase() === 'morning' ? 'rgba(245, 158, 11, 0.15)' : act.time_slot.toLowerCase() === 'afternoon' ? 'rgba(59, 130, 246, 0.15)' : 'rgba(139, 92, 246, 0.15)',
+                                color: act.time_slot.toLowerCase() === 'morning' ? '#fbbf24' : act.time_slot.toLowerCase() === 'afternoon' ? '#60a5fa' : '#c084fc'
+                              }}>
+                                {act.time_slot}
+                              </span>
+                            )}
+                            <span style={{ fontWeight: 600, fontSize: '14px' }}>{act.name}</span>
+                            <span className="badge badge-purple" style={{ fontSize: '11px' }}>{act.category}</span>
+                          </div>
+
+                          {act.description && (
+                            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: 1.5 }}>
+                              {act.description}
+                            </p>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '8px', flexWrap: 'wrap', fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {act.address && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <MapPin size={12} color="var(--accent-blue)" /> {act.address}
+                              </span>
+                            )}
+                            {act.duration && <span>Duration: {act.duration}</span>}
+                            {act.rating && <span>Rating: ★ {act.rating}</span>}
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--accent-purple)' }}>
+                            ${Number(act.estimated_cost).toFixed(2)}
+                          </div>
+                          <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Est. per person</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 

@@ -46,16 +46,23 @@ def hotel_agent_node(state: TravelPlanState) -> Dict[str, Any]:
     end_date = state.get("end_date", "")
     total_budget = float(state.get("budget", 2000.0))
 
-    # Configuration: Hotel budget percentage
+    nights = calculate_stay_nights(start_date, end_date)
+
+    # Check if budget agent provided a reduced hotel_budget_cap during re-planning
+    replan_cap = state.get("hotel_budget_cap")
     hotel_budget_pct_str = os.getenv("HOTEL_BUDGET_PCT", "35.0")
     try:
         hotel_budget_pct = float(hotel_budget_pct_str)
     except ValueError:
         hotel_budget_pct = 35.0
 
-    nights = calculate_stay_nights(start_date, end_date)
-    lodging_budget = round(total_budget * (hotel_budget_pct / 100.0), 2)
-    per_night_cap = round(lodging_budget / nights, 2)
+    if replan_cap is not None:
+        lodging_budget = round(float(replan_cap), 2)
+        logger.info(f"Hotel Agent applying re-planning lodging budget cap: ${lodging_budget:.2f}")
+    else:
+        lodging_budget = round(total_budget * (hotel_budget_pct / 100.0), 2)
+
+    per_night_cap = round(lodging_budget / max(1, nights), 2)
 
     input_payload = {
         "destination": destination,
@@ -66,6 +73,8 @@ def hotel_agent_node(state: TravelPlanState) -> Dict[str, Any]:
         "lodging_budget": lodging_budget,
         "nights": nights,
         "per_night_cap": per_night_cap,
+        "replan_cap_applied": replan_cap is not None,
+        "replan_attempt": state.get("replan_count", 0),
         "preferences": state.get("preferences", "")
     }
 
@@ -142,6 +151,8 @@ def hotel_agent_node(state: TravelPlanState) -> Dict[str, Any]:
         "provider": active_provider,
         "used_live_api": not is_fallback,
         "is_fallback": is_fallback,
+        "replan_cap_applied": replan_cap is not None,
+        "replan_attempt": state.get("replan_count", 0),
         "fallback_reason": error_msg,
         "error_notice": error_msg
     }

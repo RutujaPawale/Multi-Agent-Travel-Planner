@@ -31,7 +31,14 @@ services:
       - DUFFEL_API_KEY=${DUFFEL_API_KEY:-}
       - FLIGHT_PROVIDER=${FLIGHT_PROVIDER:-duffel}
       - HOTEL_PROVIDER=${HOTEL_PROVIDER:-duffel}
+      - OPENTRIPMAP_API_KEY=${OPENTRIPMAP_API_KEY:-}
+      - ACTIVITY_PROVIDER=${ACTIVITY_PROVIDER:-opentripmap}
+      - LLM_PROVIDER=${LLM_PROVIDER:-gemini}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      - LLM_MODEL=${LLM_MODEL:-gemini-2.5-flash}
+      - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-gemini-3.1-flash-lite}
       - HOTEL_BUDGET_PCT=${HOTEL_BUDGET_PCT:-35.0}
+      - ACTIVITY_BUDGET_PCT=${ACTIVITY_BUDGET_PCT:-20.0}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 5s

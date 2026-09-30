@@ -105,7 +105,30 @@ class DuffelProvider(FlightProvider, HotelProvider):
                     return float("inf")
 
             sorted_offers = sorted(offers, key=parse_offer_price)
-            top_3 = sorted_offers[:3]
+
+            # Filter offers to those at or under flight budget cap where possible
+            qualifying_offers = [o for o in sorted_offers if parse_offer_price(o) <= budget] if budget > 0 else []
+            if qualifying_offers:
+                selected_offers = qualifying_offers[:3]
+                cheapest_qualifying = parse_offer_price(selected_offers[0])
+                logger.info(
+                    f"Duffel flight search: {len(qualifying_offers)} offers qualify at or under budget cap (${budget:.2f}). "
+                    f"Selected top {len(selected_offers)} (cheapest: ${cheapest_qualifying:.2f})."
+                )
+                cap_note = f" [within ${budget:.2f} cap]"
+            else:
+                selected_offers = sorted_offers[:3]
+                if budget > 0:
+                    cheapest_available = parse_offer_price(selected_offers[0]) if selected_offers else 0.0
+                    logger.warning(
+                        f"Duffel flight search: 0 offers found at or under budget cap (${budget:.2f}). "
+                        f"Falling back to {len(selected_offers)} cheapest available offers (lowest: ${cheapest_available:.2f})."
+                    )
+                    cap_note = f" [exceeds ${budget:.2f} cap; cheapest available]"
+                else:
+                    cap_note = ""
+
+            top_3 = selected_offers
 
             formatted_flights: List[FlightOption] = []
             for i, offer in enumerate(top_3):
@@ -144,7 +167,7 @@ class DuffelProvider(FlightProvider, HotelProvider):
                         currency=currency,
                         source="Duffel Live API",
                         is_mock=False,
-                        notes=f"{'Non-stop' if stops == 0 else f'{stops} stop(s)'} flight via {carrier_name}"
+                        notes=f"{'Non-stop' if stops == 0 else f'{stops} stop(s)'} flight via {carrier_name}{cap_note}"
                     ))
                 except Exception as parse_err:
                     logger.warning(f"Error parsing Duffel flight offer: {parse_err}")
