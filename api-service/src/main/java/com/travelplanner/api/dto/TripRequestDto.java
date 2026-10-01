@@ -2,8 +2,10 @@ package com.travelplanner.api.dto;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.UUID;
 
 public class TripRequestDto {
+    private UUID tripId;
     private String origin;
     private String destination;
     private LocalDate startDate;
@@ -12,6 +14,14 @@ public class TripRequestDto {
     private String preferences;
 
     public TripRequestDto() {}
+
+    public UUID getTripId() {
+        return tripId;
+    }
+
+    public void setTripId(UUID tripId) {
+        this.tripId = tripId;
+    }
 
     public String getOrigin() {
         return origin;

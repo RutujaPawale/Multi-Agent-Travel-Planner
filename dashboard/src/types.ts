@@ -1,10 +1,21 @@
 export interface TripRequest {
+  tripId?: string;
   origin: string;
   destination: string;
   startDate: string;
   endDate: string;
   budget: number;
   preferences: string;
+}
+
+export interface LiveAgentEvent {
+  trip_id: string;
+  agent: string;
+  status: 'STARTED' | 'SUCCESS' | 'REPLANNING' | 'FAILED' | 'COMPLETED' | string;
+  message: string;
+  stage?: string;
+  details?: any;
+  timestamp: string;
 }
 
 export interface FlightOption {
@@ -121,6 +132,7 @@ export interface ItineraryResult {
 
 export interface TripResponse {
   id: string;
+  userId?: string;
   origin: string;
   destination: string;
   startDate: string;
@@ -132,3 +144,16 @@ export interface TripResponse {
   agentRuns?: AgentRun[];
   createdAt: string;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  createdAt?: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: User;
+}
+

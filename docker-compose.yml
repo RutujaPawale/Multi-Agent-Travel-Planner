@@ -39,6 +39,7 @@ services:
       - LLM_FALLBACK_MODEL=${LLM_FALLBACK_MODEL:-gemini-3.1-flash-lite}
       - HOTEL_BUDGET_PCT=${HOTEL_BUDGET_PCT:-35.0}
       - ACTIVITY_BUDGET_PCT=${ACTIVITY_BUDGET_PCT:-20.0}
+      - JWT_SECRET=${JWT_SECRET:-MultiAgentTravelPlannerSecureSecretKeyForSigningJwtTokens1234567890}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 5s
@@ -62,6 +63,7 @@ services:
       - SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - AGENT_SERVICE_URL=http://agent-service:8000
+      - JWT_SECRET=${JWT_SECRET:-MultiAgentTravelPlannerSecureSecretKeyForSigningJwtTokens1234567890}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/api/health || exit 1"]
       interval: 5s

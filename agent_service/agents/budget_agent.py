@@ -9,6 +9,14 @@ try:
 except (ImportError, ModuleNotFoundError):
     from agent_service.db import log_agent_run
 
+try:
+    from broadcaster import publish_trip_event
+except (ImportError, ModuleNotFoundError):
+    try:
+        from agent_service.broadcaster import publish_trip_event
+    except (ImportError, ModuleNotFoundError):
+        publish_trip_event = None
+
 logger = logging.getLogger("budget_agent")
 
 def calculate_stay_nights(start_date_str: str, end_date_str: str) -> int:
@@ -47,6 +55,15 @@ def budget_agent_node(state: TravelPlanState) -> Dict[str, Any]:
     # Re-planning state tracking
     replan_count = state.get("replan_count", 0)
     replan_reasons: List[str] = list(state.get("replan_reasons", []))
+
+    if publish_trip_event and trip_id:
+        publish_trip_event(
+            trip_id=str(trip_id),
+            agent="Budget Agent",
+            status="STARTED",
+            message=f"Auditing total estimated expenses against user budget (${user_budget:,.2f}) - Check {replan_count + 1}...",
+            details={"user_budget": user_budget, "replan_attempt": replan_count}
+        )
 
     # 1. Calculate Component Costs
     # Flights: top recommendation price

@@ -3,6 +3,7 @@ package com.travelplanner.api.model;
 import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.springframework.data.domain.Persistable;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -11,11 +12,13 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "trips")
-public class Trip {
+public class Trip implements Persistable<UUID> {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Transient
+    private boolean isNew = true;
 
     @Column(name = "user_id")
     private UUID userId;
@@ -55,11 +58,25 @@ public class Trip {
 
     @PrePersist
     protected void onCreate() {
+        if (this.id == null) {
+            this.id = UUID.randomUUID();
+        }
         this.createdAt = OffsetDateTime.now();
         this.updatedAt = OffsetDateTime.now();
         if (this.status == null) {
             this.status = "PENDING";
         }
+    }
+
+    @PostPersist
+    @PostLoad
+    void markNotNew() {
+        this.isNew = false;
+    }
+
+    @Override
+    public boolean isNew() {
+        return this.isNew;
     }
 
     @PreUpdate

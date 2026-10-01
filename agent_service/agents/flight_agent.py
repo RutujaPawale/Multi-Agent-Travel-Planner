@@ -15,6 +15,14 @@ try:
 except (ImportError, ModuleNotFoundError):
     from agent_service.db import log_agent_run
 
+try:
+    from broadcaster import publish_trip_event
+except (ImportError, ModuleNotFoundError):
+    try:
+        from agent_service.broadcaster import publish_trip_event
+    except (ImportError, ModuleNotFoundError):
+        publish_trip_event = None
+
 logger = logging.getLogger("flight_agent")
 
 def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
@@ -36,8 +44,19 @@ def flight_agent_node(state: TravelPlanState) -> Dict[str, Any]:
     if replan_cap is not None:
         flight_budget = round(float(replan_cap), 2)
         logger.info(f"Flight Agent applying re-planning flight budget cap: ${flight_budget:.2f}")
+        start_msg = f"Re-evaluating flight options with reduced budget cap ${flight_budget:.2f}..."
     else:
         flight_budget = float(state.get("budget", 1000.0))
+        start_msg = f"Searching flights for {origin} -> {destination}..."
+
+    if publish_trip_event and trip_id:
+        publish_trip_event(
+            trip_id=str(trip_id),
+            agent="Flight Agent",
+            status="STARTED",
+            message=start_msg,
+            details={"origin": origin, "destination": destination, "budget": flight_budget}
+        )
 
     input_payload = {
         "origin": origin,

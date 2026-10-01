@@ -43,9 +43,13 @@ public class TripService {
         this.objectMapper = objectMapper;
     }
 
-    public TripResponseDto createAndPlanTrip(TripRequestDto request) {
+    public TripResponseDto createAndPlanTrip(TripRequestDto request, UUID userId) {
         // 1. Initial persistence of trip
         Trip trip = new Trip();
+        if (request.getTripId() != null) {
+            trip.setId(request.getTripId());
+        }
+        trip.setUserId(userId);
         trip.setOrigin(request.getOrigin());
         trip.setDestination(request.getDestination());
         trip.setStartDate(request.getStartDate());
@@ -88,23 +92,42 @@ public class TripService {
     }
 
     @Transactional(readOnly = true)
-    public List<TripResponseDto> getAllTrips() {
-        return tripRepository.findAllByOrderByCreatedAtDesc()
+    public List<TripResponseDto> getUserTrips(UUID userId) {
+        return tripRepository.findByUserIdOrderByCreatedAtDesc(userId)
                 .stream()
                 .map(this::mapToDto)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public TripResponseDto getTripById(UUID id) {
+    public TripResponseDto getUserTripById(UUID id, UUID userId) {
         Trip trip = tripRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Trip not found with id: " + id));
+                .orElseThrow(() -> new java.util.NoSuchElementException("Trip not found with id: " + id));
+
+        if (trip.getUserId() == null || !trip.getUserId().equals(userId)) {
+            throw new SecurityException("Access denied: You do not own trip " + id);
+        }
+
         return mapToDto(trip);
+    }
+
+    @Transactional
+    public void deleteUserTrip(UUID id, UUID userId) {
+        Trip trip = tripRepository.findById(id)
+                .orElseThrow(() -> new java.util.NoSuchElementException("Trip not found with id: " + id));
+
+        if (trip.getUserId() == null || !trip.getUserId().equals(userId)) {
+            throw new SecurityException("Access denied: You cannot delete trip " + id);
+        }
+
+        tripRepository.delete(trip);
+        log.info("Deleted trip {} belonging to user {}", id, userId);
     }
 
     private TripResponseDto mapToDto(Trip trip) {
         TripResponseDto dto = new TripResponseDto();
         dto.setId(trip.getId());
+        dto.setUserId(trip.getUserId());
         dto.setOrigin(trip.getOrigin());
         dto.setDestination(trip.getDestination());
         dto.setStartDate(trip.getStartDate());

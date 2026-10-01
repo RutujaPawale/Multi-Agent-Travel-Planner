@@ -13,17 +13,38 @@ try:
 except (ImportError, ModuleNotFoundError):
     from agent_service.db import log_agent_run, update_agent_run
 
+try:
+    from broadcaster import publish_trip_event
+except (ImportError, ModuleNotFoundError):
+    try:
+        from agent_service.broadcaster import publish_trip_event
+    except (ImportError, ModuleNotFoundError):
+        publish_trip_event = None
+
 logger = logging.getLogger("orchestrator")
 
 def orchestrator_init_node(state: TravelPlanState) -> Dict[str, Any]:
     """Logs the initialization of the multi-agent trip planning orchestration."""
     trip_id = state.get("trip_id")
+    origin = state.get("origin")
+    destination = state.get("destination")
+    budget = state.get("budget", 0.0)
+
+    if publish_trip_event and trip_id:
+        publish_trip_event(
+            trip_id=str(trip_id),
+            agent="Orchestrator Agent",
+            status="STARTED",
+            message=f"Initiating multi-agent travel planning workflow for {origin} -> {destination} (${budget:,.2f} budget)...",
+            details={"origin": origin, "destination": destination, "budget": budget}
+        )
+
     input_payload = {
-        "origin": state.get("origin"),
-        "destination": state.get("destination"),
+        "origin": origin,
+        "destination": destination,
         "start_date": state.get("start_date"),
         "end_date": state.get("end_date"),
-        "budget": state.get("budget"),
+        "budget": budget,
         "preferences": state.get("preferences")
     }
 
@@ -121,6 +142,15 @@ def synthesizer_node(state: TravelPlanState) -> Dict[str, Any]:
             input_data={"stage": "SYNTHESIS"},
             output_data=orchestrator_output,
             status="SUCCESS"
+        )
+
+    if publish_trip_event and trip_id:
+        publish_trip_event(
+            trip_id=str(trip_id),
+            agent="Synthesizer",
+            status="SUCCESS",
+            message=f"Synthesized final itinerary ({len(flights)} flights, {len(hotels)} hotels, {len(activities)} activities across {len(day_plans)} days).",
+            details=orchestrator_output
         )
 
     # Update orchestrator entry in agent_logs

@@ -15,6 +15,14 @@ try:
 except (ImportError, ModuleNotFoundError):
     from agent_service.db import log_agent_run
 
+try:
+    from broadcaster import publish_trip_event
+except (ImportError, ModuleNotFoundError):
+    try:
+        from agent_service.broadcaster import publish_trip_event
+    except (ImportError, ModuleNotFoundError):
+        publish_trip_event = None
+
 logger = logging.getLogger("hotel_agent")
 
 def calculate_stay_nights(start_date_str: str, end_date_str: str) -> int:
@@ -59,10 +67,21 @@ def hotel_agent_node(state: TravelPlanState) -> Dict[str, Any]:
     if replan_cap is not None:
         lodging_budget = round(float(replan_cap), 2)
         logger.info(f"Hotel Agent applying re-planning lodging budget cap: ${lodging_budget:.2f}")
+        start_msg = f"Re-evaluating hotel accommodations with reduced budget cap ${lodging_budget:.2f} (${round(lodging_budget / max(1, nights), 2)}/night)..."
     else:
         lodging_budget = round(total_budget * (hotel_budget_pct / 100.0), 2)
+        start_msg = f"Searching accommodations in {destination} (${round(lodging_budget / max(1, nights), 2)}/night cap)..."
 
     per_night_cap = round(lodging_budget / max(1, nights), 2)
+
+    if publish_trip_event and trip_id:
+        publish_trip_event(
+            trip_id=str(trip_id),
+            agent="Hotel Agent",
+            status="STARTED",
+            message=start_msg,
+            details={"destination": destination, "lodging_budget": lodging_budget, "per_night_cap": per_night_cap, "nights": nights}
+        )
 
     input_payload = {
         "destination": destination,

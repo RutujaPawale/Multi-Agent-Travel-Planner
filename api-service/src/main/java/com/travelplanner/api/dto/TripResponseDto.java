@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public class TripResponseDto {
     private UUID id;
+    private UUID userId;
     private String origin;
     private String destination;
     private LocalDate startDate;
@@ -28,6 +29,14 @@ public class TripResponseDto {
 
     public void setId(UUID id) {
         this.id = id;
+    }
+
+    public UUID getUserId() {
+        return userId;
+    }
+
+    public void setUserId(UUID userId) {
+        this.userId = userId;
     }
 
     public String getOrigin() {

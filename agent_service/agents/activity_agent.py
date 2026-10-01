@@ -16,6 +16,14 @@ try:
 except (ImportError, ModuleNotFoundError):
     from agent_service.db import log_agent_run
 
+try:
+    from broadcaster import publish_trip_event
+except (ImportError, ModuleNotFoundError):
+    try:
+        from agent_service.broadcaster import publish_trip_event
+    except (ImportError, ModuleNotFoundError):
+        publish_trip_event = None
+
 logger = logging.getLogger("activity_agent")
 
 def calculate_trip_days(start_date_str: str, end_date_str: str) -> int:
@@ -61,10 +69,21 @@ def activity_agent_node(state: TravelPlanState) -> Dict[str, Any]:
     if replan_cap is not None:
         activity_budget = round(float(replan_cap), 2)
         logger.info(f"Activity Agent applying re-planning activity budget cap: ${activity_budget:.2f}")
+        start_msg = f"Re-structuring activities with reduced budget cap ${activity_budget:.2f} (${round(activity_budget / max(1, trip_days), 2)}/day)..."
     else:
         activity_budget = round(total_budget * (activity_budget_pct / 100.0), 2)
+        start_msg = f"Discovering attractions and planning daily itinerary for {destination} (${round(activity_budget / max(1, trip_days), 2)}/day budget)..."
 
     per_day_budget = round(activity_budget / max(1, trip_days), 2)
+
+    if publish_trip_event and trip_id:
+        publish_trip_event(
+            trip_id=str(trip_id),
+            agent="Activity Agent",
+            status="STARTED",
+            message=start_msg,
+            details={"destination": destination, "activity_budget": activity_budget, "per_day_budget": per_day_budget, "trip_days": trip_days}
+        )
 
     input_payload = {
         "destination": destination,
