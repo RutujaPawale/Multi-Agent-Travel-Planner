@@ -140,9 +140,14 @@ Building this surfaced several real integration and debugging problems — docum
 ## Tech stack
 
 **Backend (orchestration):** Python, FastAPI, LangGraph
+
 **Backend (API/persistence):** Java, Spring Boot, Spring Security, JWT, JPA
+
 **Frontend:** React, TypeScript, Vite
+
 **Database:** PostgreSQL
+
 **Infra:** Docker, Docker Compose
+
 **External APIs:** Duffel (flights/hotels), OpenTripMap (points of interest), Gemini (LLM itinerary planning)
 
